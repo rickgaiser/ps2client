@@ -77,6 +77,20 @@
   if (type == SOCK_STREAM) {
    int nodelay = 1;
    setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (void *)&nodelay, sizeof(nodelay));
+
+   // Notice a ps2 that was reset or switched off: it never closes the
+   // connection, so without keepalive a run waits for its whole timeout.
+   // After a reboot ps2link answers the probe with a reset; a ps2 that is
+   // off does not answer at all. The IOP answers the probes, also while
+   // the EE is busy, and they do not replace the connection.
+   int keepalive = 1;
+   setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive, sizeof(keepalive));
+#ifdef TCP_KEEPIDLE
+   int idle = 5, interval = 2, count = 5;
+   setsockopt(sock, IPPROTO_TCP, TCP_KEEPIDLE, (void *)&idle, sizeof(idle));
+   setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, (void *)&interval, sizeof(interval));
+   setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, (void *)&count, sizeof(count));
+#endif
   }
 
   // Without a timeout, connect the socket and wait as long as it takes.

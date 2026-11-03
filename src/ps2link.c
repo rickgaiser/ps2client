@@ -206,15 +206,16 @@
    activity = ps2link_activity; lost = ps2link_lost;
    pthread_mutex_unlock(&ps2link_lock);
 
-   // ps2link closed the connection (the ps2 was reset, or the program
-   // rebooted it). Give the last console output a moment to come in.
+   // ps2link closed the connection (the program rebooted it), or the ps2
+   // stopped answering keepalives (it was reset or switched off). Give the
+   // last console output a moment to come in.
    if (lost) {
     sleep_ms(500);
     pthread_mutex_lock(&ps2link_lock);
     if (ps2link_marker != NULL && !ps2link_marker_seen && ps2link_line_length > 0) { ps2link_check_line(); }
     status = ps2link_marker_seen ? (ps2link_marker_status & 0xff) : PS2CLIENT_EXIT_CONNLOST;
     pthread_mutex_unlock(&ps2link_lock);
-    if (status == PS2CLIENT_EXIT_CONNLOST) { fprintf(stderr, "ps2client: ps2link closed the connection.\n"); }
+    if (status == PS2CLIENT_EXIT_CONNLOST) { fprintf(stderr, "ps2client: ps2link closed the connection, or the ps2 was reset or switched off.\n"); }
     break;
    }
 

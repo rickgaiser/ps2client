@@ -141,6 +141,11 @@ printf 'readback blob.bin\nprint @@END@@ status=0\n' > readback.elf
 check "big host: read" 0 "${H[@]}" -t 10 -e @@END@@ execee host:readback.elf
 expect "readback size and crc" grep -q "^readback 300000 $(python3 -c 'import sys,zlib;print("%08x"%zlib.crc32(open(sys.argv[1],"rb").read()))' blob.bin)$" out.txt
 
+# --- a host: file opened for reading and writing (PS2 flags 3) can be read
+printf 'rdwrback blob.bin\nprint @@END@@ status=0\n' > rdwr.elf
+check "host: read of a read-write file" 0 "${H[@]}" -t 10 -e @@END@@ execee host:rdwr.elf
+expect "read-write: size and crc, not truncated" grep -q "^rdwrback 300000 $(python3 -c 'import sys,zlib;print("%08x"%zlib.crc32(open(sys.argv[1],"rb").read()))' blob.bin)$" out.txt
+
 # --- second client
 "$CLIENT" "${H[@]}" -t 5 listen > /dev/null 2>&1 &
 LISTENER=$!
@@ -158,6 +163,32 @@ start_fake --ignore-dumpreg 1
 check "handshake retries" 0 "${H[@]}" -t 10 -e @@END@@ execee host:nostatus.elf
 expect "retried after 1 s" test "$MS" -ge 990
 stop_fake
+
+# --- the ps2 is reset or switched off during a run: it never closes the
+# connection. Take the link down first, so the fake's FIN gets lost.
+# power_off <name> <restart>: a run that loses the ps2 after 1 s; with
+# restart, a new fake (a fresh network stack) comes up at the same address.
+power_off() {
+    local name=$1 restart=$2 start rc
+    start_fake
+    printf 'print running\nsleep 60\n' > long.elf
+    start=$(now_ms)
+    "$CLIENT" "${H[@]}" -t 60 -e @@END@@ execee host:long.elf > out.txt 2> err.txt &
+    local cpid=$!
+    sleep 1
+    ip link set veth0 down
+    stop_fake
+    [ "$restart" = 1 ] && start_fake
+    wait $cpid; rc=$?
+    MS=$(( $(now_ms) - start ))
+    OUT=$(cat out.txt) ERR=$(cat err.txt)
+    expect "$name: connection lost" test "$rc" = 74
+    expect "$name: noticed long before the timeout" test "$MS" -lt 25000
+    stop_fake
+}
+power_off "ps2 reset" 1
+expect "ps2 reset: noticed at the first keepalive" test "$MS" -lt 10000
+power_off "ps2 switched off" 0
 
 echo "passed $PASS, failed $FAIL"
 [ "$FAIL" = 0 ]

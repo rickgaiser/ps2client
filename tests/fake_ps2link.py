@@ -14,6 +14,7 @@
 #   sleep <seconds>    wait
 #   close              close the request connection (ps2link went away)
 #   readback <file>    read a host: file and print its size and checksum
+#   rdwrback <file>    the same, the file opened for reading and writing
 #
 # dumpreg writes 8 bytes to the given host: file, like ps2link's INTC dump.
 
@@ -46,6 +47,7 @@ class Fake:
         self.lock = threading.Lock()
         self.ignore_dumpreg = ignore_dumpreg
         self.console = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.running = False
 
     def recv_all(self, n):
         data = b""
@@ -85,8 +87,8 @@ class Fake:
             self.request(REQ_WRITE, struct.pack(">ii", fd, len(data)), data)
             self.response(10)
 
-    def load(self, path):
-        fd = self.open(path, PS2_O_RDONLY)
+    def load(self, path, flags=None):
+        fd = self.open(path, PS2_O_RDONLY if flags is None else flags)
         if fd < 0:
             return None
         data = b""
@@ -103,6 +105,13 @@ class Fake:
         self.console.sendto(data, (self.client_ip, PORT_CONSOLE))
 
     def run_script(self, text):
+        self.running = True
+        try:
+            self.run_lines(text)
+        finally:
+            self.running = False
+
+    def run_lines(self, text):
         for line in text.splitlines():
             cmd, _, arg = line.partition(" ")
             if cmd == "print":
@@ -116,9 +125,10 @@ class Fake:
                 self.conn.shutdown(socket.SHUT_RDWR)
                 self.conn.close()
                 return
-            elif cmd == "readback":
-                data = self.load(arg)
-                self.say(b"readback %d %08x\n" % (len(data), zlib.crc32(data)))
+            elif cmd in ("readback", "rdwrback"):
+                rdwr = PS2_O_RDONLY | PS2_O_WRONLY
+                data = self.load(arg, rdwr if cmd == "rdwrback" else None) or b""
+                self.say(b"%s %d %08x\n" % (cmd.encode(), len(data), zlib.crc32(data)))
 
     def command(self, packet):
         number, _ = struct.unpack(">IH", packet[:6])
