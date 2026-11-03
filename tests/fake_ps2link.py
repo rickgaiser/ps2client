@@ -32,6 +32,7 @@ PORT_CONSOLE = 0x4712
 
 CMD_EXECEE = 0xBABE0203
 CMD_DUMPREG = 0xBABE020A
+CMD_STATUS = 0xBABE020E
 REQ_OPEN, REQ_CLOSE, REQ_READ, REQ_WRITE = 0xBABE0111, 0xBABE0121, 0xBABE0131, 0xBABE0141
 
 PS2_O_RDONLY, PS2_O_WRONLY, PS2_O_CREAT = 0x0001, 0x0002, 0x0200
@@ -156,6 +157,7 @@ class Fake:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bind", required=True, help="the address to serve on")
+    ap.add_argument("--no-status", action="store_true", help="a ps2link without the status command")
     ap.add_argument("--ignore-dumpreg", type=int, default=0, help="ignore the first N dumpreg commands (not ready yet)")
     opts = ap.parse_args()
     fake = Fake(opts.ignore_dumpreg)
@@ -182,7 +184,13 @@ def main():
         if server in ready:
             accept()
             continue
-        packet, _ = commands.recvfrom(2048)
+        packet, addr = commands.recvfrom(2048)
+        # status: answered without the request connection, as mxlink's IOP does
+        if struct.unpack(">I", packet[:4])[0] == CMD_STATUS:
+            if not opts.no_status:
+                reply = struct.pack(">IHIIIi256s", CMD_STATUS + 1, 280, 1, 2 if fake.running else 1, 7, 3, b"host:fake.elf")
+                commands.sendto(reply, addr)
+            continue
         # Without a request connection the host: open fails and the command
         # does nothing, as on ps2link.
         if fake.conn is None:

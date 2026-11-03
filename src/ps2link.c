@@ -189,6 +189,34 @@
 
  }
 
+ int ps2link_status(int timeout_ms) { long long start = time_ms();
+  struct { unsigned int number; unsigned short length; } PACKED command;
+  struct { unsigned int number; unsigned short length; unsigned int version, state, returns; int last_status; char path[256]; } PACKED reply;
+  static const char *states[] = { "starting", "ready", "running" };
+
+  command.number = htonl(PS2LINK_COMMAND_STATUS);
+  command.length = htons(sizeof(command));
+
+  // UDP: ask again if no answer comes.
+  while (time_ms() - start < timeout_ms) { fd_set fds; struct timeval tv = { 0, 200000 }; int size; unsigned int state;
+
+   if (network_send(command_socket, &command, sizeof(command)) < 0) { sleep_ms(200); continue; }
+   FD_ZERO(&fds); FD_SET(command_socket, &fds);
+   if (select(command_socket + 1, &fds, NULL, NULL, &tv) <= 0) { continue; }
+   if ((size = recv(command_socket, (void *)&reply, sizeof(reply), 0)) < (int)sizeof(reply) || ntohl(reply.number) != PS2LINK_RESPONSE_STATUS) { continue; }
+
+   reply.path[sizeof(reply.path) - 1] = 0;
+   state = ntohl(reply.state);
+   printf("state=%s returns=%u status=%d program=%s\n", state < 3 ? states[state] : "unknown", ntohl(reply.returns), (int)ntohl(reply.last_status), reply.path);
+   return 0;
+
+  }
+
+  // End function.
+  return -1;
+
+ }
+
  int ps2link_mainloop(int timeout) { int status = PS2CLIENT_EXIT_OK;
 
   // Disconnect from the command port.

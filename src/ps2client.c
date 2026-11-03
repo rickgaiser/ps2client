@@ -20,7 +20,7 @@
  // The commands: their minimum number of arguments, what they need from the
  // connection, and whether they wait for output afterwards.
  enum { CMD_RESET, CMD_EXECIOP, CMD_EXECEE, CMD_POWEROFF, CMD_SCRDUMP, CMD_NETDUMP, CMD_DUMPMEM, CMD_STARTVU,
-        CMD_STOPVU, CMD_DUMPREG, CMD_GSEXEC, CMD_WRITEMEM, CMD_IOPEXCEP, CMD_LISTEN, CMD_PING };
+        CMD_STOPVU, CMD_DUMPREG, CMD_GSEXEC, CMD_WRITEMEM, CMD_IOPEXCEP, CMD_LISTEN, CMD_PING, CMD_STATUS };
 
  #define NEEDS_HOST 1 // ps2link reads or writes host: files, so wait until it can
  #define NO_WAIT    2 // exit right after sending the command
@@ -41,6 +41,7 @@
   { "iopexcep", CMD_IOPEXCEP, 0, NO_WAIT    },
   { "listen",   CMD_LISTEN,   0, 0          },
   { "ping",     CMD_PING,     0, NEEDS_HOST },
+  { "status",   CMD_STATUS,   0, NO_WAIT    },
  };
 
  // Register dump types, by name.
@@ -164,6 +165,19 @@
    ps2link_disconnect();
    if (result < 0) { fprintf(stderr, "ps2link at %s is not answering.\n", hostname); return PS2CLIENT_EXIT_NOCONNECT; }
    printf("ps2link at %s answered in %d ms.\n", hostname, result);
+   return PS2CLIENT_EXIT_OK;
+
+  }
+
+  // status: what is mxlink doing? The IOP answers it alone, on the command
+  // port: no host: connection is replaced and the console port stays free,
+  // so unlike ping it is safe while a program runs. -t is how long to try.
+  if (commands[command].id == CMD_STATUS) { int limit = timeout > 0 ? timeout * 1000 : 1000;
+
+   if ((result = ps2link_connect(hostname, what, limit)) != 0) { return result; }
+   result = ps2link_status(limit);
+   ps2link_disconnect();
+   if (result < 0) { fprintf(stderr, "%s gives no status: off, restarting, or a ps2link without it.\n", hostname); return PS2CLIENT_EXIT_NOCONNECT; }
    return PS2CLIENT_EXIT_OK;
 
   }

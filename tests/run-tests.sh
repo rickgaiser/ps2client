@@ -190,5 +190,20 @@ power_off "ps2 reset" 1
 expect "ps2 reset: noticed at the first keepalive" test "$MS" -lt 10000
 power_off "ps2 switched off" 0
 
+# --- status: answered without a host: connection, also while a program runs
+start_fake
+check "status, idle" 0 "${H[@]}" -t 2 status
+expect "status: ready, returns, last status, program" test "$OUT" = "state=ready returns=7 status=3 program=host:fake.elf"
+printf 'print running\nsleep 2\nprint @@END@@ status=0\n' > st.elf
+"$CLIENT" "${H[@]}" -t 10 -e @@END@@ execee host:st.elf > run.txt 2>&1 &
+cpid=$!
+sleep 1
+check "status during a run" 0 "${H[@]}" -t 2 status
+expect "status: running" test "${OUT%% *}" = "state=running"
+wait $cpid
+expect "the run was not cut off" test $? = 0
+stop_fake
+check "status, nothing there" 69 "${H[@]}" -t 1 status
+
 echo "passed $PASS, failed $FAIL"
 [ "$FAIL" = 0 ]

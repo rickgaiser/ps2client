@@ -28,6 +28,10 @@
  // Returns the round trip time in ms, or -1 on timeout.
  int ps2link_handshake(int timeout_ms);
 
+ // Ask mxlink's status and print it: state=<starting|ready|running> returns=<n>
+ // status=<last exit status> program=<path>. Returns < 0 without an answer.
+ int ps2link_status(int timeout_ms);
+
  // Returns the exit status for ps2client.
  int ps2link_mainloop(int timeout);
 
@@ -50,6 +54,7 @@
  #define PS2LINK_COMMAND_GSEXEC		0xBABE020B
  #define PS2LINK_COMMAND_WRITEMEM	0xBABE020C
  #define PS2LINK_COMMAND_IOPEXCEP	0xBABE020D
+ #define PS2LINK_COMMAND_STATUS		0xBABE020E
 
  int ps2link_command_reset(void);
 
@@ -123,6 +128,7 @@
  // PS2LINK RESPONSE FUNCTIONS //
  ////////////////////////////////
 
+ #define PS2LINK_RESPONSE_STATUS	0xBABE020F
  #define PS2LINK_RESPONSE_OPEN		0xBABE0112
  #define PS2LINK_RESPONSE_CLOSE		0xBABE0122
  #define PS2LINK_RESPONSE_READ		0xBABE0132
