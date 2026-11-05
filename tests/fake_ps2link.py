@@ -158,6 +158,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bind", required=True, help="the address to serve on")
     ap.add_argument("--no-status", action="store_true", help="a ps2link without the status command")
+    ap.add_argument("--status-v1", action="store_true", help="an mxlink whose status has no model and rom")
     ap.add_argument("--ignore-dumpreg", type=int, default=0, help="ignore the first N dumpreg commands (not ready yet)")
     opts = ap.parse_args()
     fake = Fake(opts.ignore_dumpreg)
@@ -188,7 +189,12 @@ def main():
         # status: answered without the request connection, as mxlink's IOP does
         if struct.unpack(">I", packet[:4])[0] == CMD_STATUS:
             if not opts.no_status:
-                reply = struct.pack(">IHIIIi256s", CMD_STATUS + 1, 280, 1, 2 if fake.running else 1, 7, 3, b"host:fake.elf")
+                state = 2 if fake.running else 1
+                if opts.status_v1:
+                    reply = struct.pack(">IHIIIi256s", CMD_STATUS + 1, 278, 1, state, 7, 3, b"host:fake.elf")
+                else:
+                    reply = struct.pack(">IHIIIi256s16s16s", CMD_STATUS + 1, 310, 2, state, 7, 3, b"host:fake.elf",
+                                        b"SCPH-70004", b"0200EC20040614")
                 commands.sendto(reply, addr)
             continue
         # Without a request connection the host: open fails and the command

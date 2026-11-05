@@ -191,7 +191,7 @@
 
  int ps2link_status(int timeout_ms) { long long start = time_ms();
   struct { unsigned int number; unsigned short length; } PACKED command;
-  struct { unsigned int number; unsigned short length; unsigned int version, state, returns; int last_status; char path[256]; } PACKED reply;
+  struct { unsigned int number; unsigned short length; unsigned int version, state, returns; int last_status; char path[256]; char model[16]; char rom[16]; } PACKED reply;
   static const char *states[] = { "starting", "ready", "running" };
 
   command.number = htonl(PS2LINK_COMMAND_STATUS);
@@ -203,11 +203,14 @@
    if (network_send(command_socket, &command, sizeof(command)) < 0) { sleep_ms(200); continue; }
    FD_ZERO(&fds); FD_SET(command_socket, &fds);
    if (select(command_socket + 1, &fds, NULL, NULL, &tv) <= 0) { continue; }
-   if ((size = recv(command_socket, (void *)&reply, sizeof(reply), 0)) < (int)sizeof(reply) || ntohl(reply.number) != PS2LINK_RESPONSE_STATUS) { continue; }
+   // Version 1 ends after the path.
+   if ((size = recv(command_socket, (void *)&reply, sizeof(reply), 0)) < (int)(sizeof(reply) - sizeof(reply.model) - sizeof(reply.rom)) || ntohl(reply.number) != PS2LINK_RESPONSE_STATUS) { continue; }
 
    reply.path[sizeof(reply.path) - 1] = 0;
    state = ntohl(reply.state);
-   printf("state=%s returns=%u status=%d program=%s\n", state < 3 ? states[state] : "unknown", ntohl(reply.returns), (int)ntohl(reply.last_status), reply.path);
+   printf("state=%s returns=%u status=%d ", state < 3 ? states[state] : "unknown", ntohl(reply.returns), (int)ntohl(reply.last_status));
+   if (size >= (int)sizeof(reply) && ntohl(reply.version) >= 2) { reply.model[sizeof(reply.model) - 1] = 0; reply.rom[sizeof(reply.rom) - 1] = 0; printf("model=%s rom=%s ", reply.model, reply.rom); }
+   printf("program=%s\n", reply.path);
    return 0;
 
   }

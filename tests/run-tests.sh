@@ -193,7 +193,7 @@ power_off "ps2 switched off" 0
 # --- status: answered without a host: connection, also while a program runs
 start_fake
 check "status, idle" 0 "${H[@]}" -t 2 status
-expect "status: ready, returns, last status, program" test "$OUT" = "state=ready returns=7 status=3 program=host:fake.elf"
+expect "status: ready, returns, last status, model, rom, program" test "$OUT" = "state=ready returns=7 status=3 model=SCPH-70004 rom=0200EC20040614 program=host:fake.elf"
 printf 'print running\nsleep 2\nprint @@END@@ status=0\n' > st.elf
 "$CLIENT" "${H[@]}" -t 10 -e @@END@@ execee host:st.elf > run.txt 2>&1 &
 cpid=$!
@@ -202,6 +202,10 @@ check "status during a run" 0 "${H[@]}" -t 2 status
 expect "status: running" test "${OUT%% *}" = "state=running"
 wait $cpid
 expect "the run was not cut off" test $? = 0
+stop_fake
+start_fake --status-v1
+check "status, an older mxlink" 0 "${H[@]}" -t 2 status
+expect "status: no model and rom" test "$OUT" = "state=ready returns=7 status=3 program=host:fake.elf"
 stop_fake
 check "status, nothing there" 69 "${H[@]}" -t 1 status
 
