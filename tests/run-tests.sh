@@ -207,6 +207,10 @@ start_fake --status-v1
 check "status, an older mxlink" 0 "${H[@]}" -t 2 status
 expect "status: no model and rom" test "$OUT" = "state=ready returns=7 status=3 program=host:fake.elf"
 stop_fake
+start_fake --menu
+check "status, in the shell" 0 "${H[@]}" -t 2 status
+expect "status: menu" test "${OUT%% *}" = "state=menu"
+stop_fake
 check "status, nothing there" 69 "${H[@]}" -t 1 status
 
 echo "passed $PASS, failed $FAIL"
