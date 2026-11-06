@@ -142,6 +142,8 @@
   fprintf(stderr, "   iopexcep\n");
   fprintf(stderr, "   listen\n");
   fprintf(stderr, "   ping\n\n");
+  fprintf(stderr, "   serve\n");
+  fprintf(stderr, "                (files from this directory over mxlink's fast path; -t: for how long)\n\n");
   fprintf(stderr, " Exit status: 0 ok, 64 usage error, 69 ps2link not answering, 74 ps2link closed\n");
   fprintf(stderr, " the connection, 75 console port in use (another ps2client running?), 124 timeout\n");
   fprintf(stderr, " before the -e marker. With -e: the status from the marker line.\n\n");

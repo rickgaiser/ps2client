@@ -213,5 +213,7 @@ expect "status: menu" test "${OUT%% *}" = "state=menu"
 stop_fake
 check "status, nothing there" 69 "${H[@]}" -t 1 status
 
+expect "fast path server" python3 "$HERE/fastserve_test.py" "$CLIENT"
+
 echo "passed $PASS, failed $FAIL"
 [ "$FAIL" = 0 ]

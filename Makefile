@@ -44,6 +44,11 @@
  ## CLIENT MODULES ##
  ####################
 
+  OFILES += obj/fastserve.o
+  obj/fastserve.o: src/fastserve.c src/fastserve.h
+	@mkdir -p obj
+	$(CC) $(CFLAGS) -c src/fastserve.c -o obj/fastserve.o
+
   OFILES += obj/network.o
   obj/network.o: src/network.c src/network.h
 	@mkdir -p obj

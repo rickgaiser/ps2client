@@ -5,6 +5,7 @@
  #include <unistd.h>
  #include "utility.h"
  #include "ps2link.h"
+ #include "fastserve.h"
  #include "network.h"
 
  char hostname[256] = { "192.168.0.10" };
@@ -20,7 +21,7 @@
  // The commands: their minimum number of arguments, what they need from the
  // connection, and whether they wait for output afterwards.
  enum { CMD_RESET, CMD_EXECIOP, CMD_EXECEE, CMD_POWEROFF, CMD_SCRDUMP, CMD_NETDUMP, CMD_DUMPMEM, CMD_STARTVU,
-        CMD_STOPVU, CMD_DUMPREG, CMD_GSEXEC, CMD_WRITEMEM, CMD_IOPEXCEP, CMD_LISTEN, CMD_PING, CMD_STATUS };
+        CMD_STOPVU, CMD_DUMPREG, CMD_GSEXEC, CMD_WRITEMEM, CMD_IOPEXCEP, CMD_LISTEN, CMD_PING, CMD_STATUS, CMD_SERVE };
 
  #define NEEDS_HOST 1 // ps2link reads or writes host: files, so wait until it can
  #define NO_WAIT    2 // exit right after sending the command
@@ -42,6 +43,7 @@
   { "listen",   CMD_LISTEN,   0, 0          },
   { "ping",     CMD_PING,     0, NEEDS_HOST },
   { "status",   CMD_STATUS,   0, NO_WAIT    },
+  { "serve",    CMD_SERVE,    0, 0          },
  };
 
  // Register dump types, by name.
@@ -156,6 +158,9 @@
 
   // Startup network.
   if (network_startup() < 0) { fprintf(stderr, "Error: Could not startup network.\n"); return PS2CLIENT_EXIT_NOCONNECT; }
+
+  // serve: only mxlink's fast path, from this directory. -t is how long.
+  if (commands[command].id == CMD_SERVE) { return fastserve_run(timeout > 0 ? timeout : 0); }
 
   // ping: is ps2link up and serving host: files? -t is how long to try.
   if (commands[command].id == CMD_PING) { int limit = timeout > 0 ? timeout * 1000 : 2000; long long start = time_ms();
