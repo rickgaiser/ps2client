@@ -4,7 +4,7 @@ of a file and a range asked for again.  fastserve_test.py <ps2client>"""
 import os, socket, struct, subprocess, sys, tempfile, time
 
 PORT, HDR, CHUNK = 18197, 22, 1408
-OPEN, CLOSE, READ, DATA, ANSWER = 1, 2, 3, 5, 0x80
+OPEN, CLOSE, READ, DATA, WRITE, COMMIT, ANSWER = 1, 2, 3, 5, 6, 7, 0x80
 FULL = 0xFFFFFFFF  # no end of file in this range
 
 
@@ -71,6 +71,29 @@ try:
     assert total == 0 and got == {0: b""}
 
     assert request(s, header(CLOSE, 7, h), 7) == 0
+
+    w = request(s, header(OPEN, 8, 1) + b"w.bin\0", 8)
+    assert w >= 0, "open to write"
+    frames = [(0, data[:CHUNK]), (CHUNK, data[CHUNK:2 * CHUNK]), (2 * CHUNK, data[2 * CHUNK:2 * CHUNK + 100])]
+    for at, d in frames[:2]:  # the last one lost
+        s.send(header(WRITE, 9, w, len(d), at, at) + d)
+    time.sleep(0.1)
+    s.send(header(COMMIT, 9, w))
+    r = s.recv(2048)
+    assert struct.unpack("<I", r[14:18])[0] == 3, "two frames of three"
+    at, d = frames[2]
+    s.send(header(WRITE, 9, w, len(d), at, at) + d + bytes(12))
+    at, d = frames[0]
+    s.send(header(WRITE, 9, w, len(d), at, at) + d)  # one twice
+    time.sleep(0.1)
+    s.send(header(COMMIT, 9, w))
+    r = s.recv(2048)
+    assert struct.unpack("<I", r[14:18])[0] == 7, "all three"
+    s.send(header(COMMIT, 10, w))
+    r = s.recv(2048)
+    assert struct.unpack("<I", r[14:18])[0] == 0, "another id has none"
+    assert request(s, header(CLOSE, 11, w), 11) == 0
+    assert open("w.bin", "rb").read() == data[:2 * CHUNK + 100]
     print("fastserve: all passed")
 finally:
     server.terminate()
