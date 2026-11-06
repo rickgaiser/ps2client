@@ -22,6 +22,7 @@
  #include <string.h>
  #include <sys/select.h>
  #include <sys/socket.h>
+ #include <sys/stat.h>
  #include <time.h>
  #include <unistd.h>
 
@@ -39,7 +40,7 @@
  // Testing: PS2CLIENT_FAST_DROP=<n> leaves out every n-th frame.
  static unsigned int drop_every, frames_sent;
 
- enum { OP_OPEN = 1, OP_CLOSE, OP_READ, OP_LOG, OP_DATA, OP_WRITE, OP_COMMIT, OP_HELLO, OP_ANSWER = 0x80 };
+ enum { OP_OPEN = 1, OP_CLOSE, OP_READ, OP_LOG, OP_DATA, OP_WRITE, OP_COMMIT, OP_HELLO, OP_SIZE, OP_ANSWER = 0x80 };
 
  static uint32_t get32(const unsigned char *p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
  static void put32(unsigned char *p, uint32_t v) { p[0] = v; p[1] = v >> 8; p[2] = v >> 16; p[3] = v >> 24; }
@@ -160,11 +161,15 @@
    switch (request[2]) {
     case OP_OPEN: { char *path = (char *)request + FAST_HDR;
      while (*path == '/') { path++; }
-     answer(sock, &from, request, get32(request + 8) ? open(path, O_RDWR | O_CREAT, 0644) : open(path, O_RDONLY), 0);
+     answer(sock, &from, request, get32(request + 8) ? open(path, O_RDWR | O_CREAT | (get32(request + 8) & 2 ? O_TRUNC : 0), 0644) : open(path, O_RDONLY), 0);
      break;
     }
     case OP_CLOSE: answer(sock, &from, request, close((int)get32(request + 8)), 0); break;
     case OP_READ: if (got >= FAST_HDR + 4) { serve_read(sock, &from, request); } break;
+    case OP_SIZE: { struct stat s;
+     answer(sock, &from, request, fstat((int)get32(request + 8), &s) < 0 ? -1 : (int)s.st_size, 0);
+     break;
+    }
     case OP_WRITE: serve_write(request, got); break;
     case OP_COMMIT: answer(sock, &from, request, 0, get32(request + 4) == write_id ? write_have : 0); break;
     case OP_LOG: printf("%s", (char *)request + FAST_HDR); break;
