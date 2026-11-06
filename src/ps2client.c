@@ -160,7 +160,7 @@
   if (network_startup() < 0) { fprintf(stderr, "Error: Could not startup network.\n"); return PS2CLIENT_EXIT_NOCONNECT; }
 
   // serve: only mxlink's fast path, from this directory. -t is how long.
-  if (commands[command].id == CMD_SERVE) { return fastserve_run(timeout > 0 ? timeout : 0); }
+  if (commands[command].id == CMD_SERVE) { return fastserve_run(hostname, timeout > 0 ? timeout : 0); }
 
   // ping: is ps2link up and serving host: files? -t is how long to try.
   if (commands[command].id == CMD_PING) { int limit = timeout > 0 ? timeout * 1000 : 2000; long long start = time_ms();
@@ -217,10 +217,14 @@
   }
   if (result < 0) { fprintf(stderr, "Error: Could not send the command.\n"); ps2link_disconnect(); return PS2CLIENT_EXIT_NOCONNECT; }
 
+  // While a program runs, the fast path serves its files too.
+  if (commands[command].id == CMD_EXECEE || commands[command].id == CMD_EXECIOP || commands[command].id == CMD_LISTEN) { fastserve_start(hostname); }
+
   // Enter the main loop.
   result = ps2link_mainloop(timeout);
 
   // Disconnect from the ps2link server.
+  fastserve_stop();
   ps2link_disconnect();
 
   // End program.

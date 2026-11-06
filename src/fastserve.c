@@ -13,7 +13,9 @@
  #include <arpa/inet.h>
  #include <errno.h>
  #include <fcntl.h>
+ #include <netdb.h>
  #include <netinet/in.h>
+ #include <pthread.h>
  #include <stdint.h>
  #include <stdio.h>
  #include <stdlib.h>
@@ -37,7 +39,7 @@
  // Testing: PS2CLIENT_FAST_DROP=<n> leaves out every n-th frame.
  static unsigned int drop_every, frames_sent;
 
- enum { OP_OPEN = 1, OP_CLOSE, OP_READ, OP_LOG, OP_DATA, OP_WRITE, OP_COMMIT, OP_ANSWER = 0x80 };
+ enum { OP_OPEN = 1, OP_CLOSE, OP_READ, OP_LOG, OP_DATA, OP_WRITE, OP_COMMIT, OP_HELLO, OP_ANSWER = 0x80 };
 
  static uint32_t get32(const unsigned char *p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
  static void put32(unsigned char *p, uint32_t v) { p[0] = v; p[1] = v >> 8; p[2] = v >> 16; p[3] = v >> 24; }
@@ -113,9 +115,13 @@
 
  }
 
- int fastserve_run(int seconds) { static unsigned char request[2048];
-  struct sockaddr_in me, from;
-  long long end = seconds ? now_ns() + (long long)seconds * 1000000000 : 0;
+ static volatile int stopping;
+ static int beside_command;
+
+ int fastserve_run(char *hostname, int seconds) { static unsigned char request[2048];
+  struct sockaddr_in me, from, ps2;
+  long long end = seconds ? now_ns() + (long long)seconds * 1000000000 : 0, hello = 0;
+  struct hostent *entry = hostname ? gethostbyname(hostname) : NULL;
   int sock = socket(AF_INET, SOCK_DGRAM, 0), size = 4 << 20;
 
   if (getenv("PS2CLIENT_FAST_DROP")) { drop_every = strtoul(getenv("PS2CLIENT_FAST_DROP"), NULL, 0); }
@@ -126,13 +132,24 @@
   setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &size, sizeof(size));
   setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
   if (sock < 0 || bind(sock, (struct sockaddr *)&me, sizeof(me)) < 0) {
-   fprintf(stderr, "Error: Could not bind UDP port %d: %s\n", FAST_PORT, strerror(errno));
+   if (!beside_command) { fprintf(stderr, "Error: Could not bind UDP port %d: %s\n", FAST_PORT, strerror(errno)); }
    return PS2CLIENT_EXIT_PORTBUSY;
   }
 
-  while (!end || now_ns() < end) { fd_set set; struct timeval wait = { 0, 200000 };
+  memset(&ps2, 0, sizeof(ps2));
+  ps2.sin_family = AF_INET;
+  ps2.sin_port = htons(FAST_PORT);
+  if (entry) { memcpy(&ps2.sin_addr, entry->h_addr_list[0], sizeof(ps2.sin_addr)); }
+
+  while (!stopping && (!end || now_ns() < end)) { fd_set set; struct timeval wait = { 0, 200000 };
    socklen_t length = sizeof(from);
    ssize_t got;
+
+   if (entry && now_ns() >= hello) { unsigned char b[FAST_HDR];
+    header(b, OP_HELLO, 0, 0, 0, 0);
+    sendto(sock, b, sizeof(b), 0, (struct sockaddr *)&ps2, sizeof(ps2));
+    hello = now_ns() + 1000000000;
+   }
 
    FD_ZERO(&set); FD_SET(sock, &set);
    if (select(sock + 1, &set, NULL, NULL, &wait) <= 0) { continue; }
@@ -157,5 +174,30 @@
 
   close(sock);
   return PS2CLIENT_EXIT_OK;
+
+ }
+
+ static pthread_t thread_id;
+ static int thread_started;
+
+ static void *thread(void *hostname) {
+
+  fastserve_run(hostname, 0);
+  return NULL;
+
+ }
+
+ void fastserve_start(char *hostname) {
+
+  if (getenv("PS2CLIENT_NO_FAST")) { return; }
+  beside_command = 1;
+  thread_started = pthread_create(&thread_id, NULL, thread, hostname) == 0;
+
+ }
+
+ void fastserve_stop(void) {
+
+  stopping = 1;
+  if (thread_started) { pthread_join(thread_id, NULL); }
 
  }
