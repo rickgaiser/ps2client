@@ -198,6 +198,10 @@
    return PS2CLIENT_EXIT_NOCONNECT;
   }
 
+  // While a program runs, the fast path serves its files too: from before it
+  // starts, so that its first files find the host.
+  if (commands[command].id == CMD_EXECEE || commands[command].id == CMD_EXECIOP || commands[command].id == CMD_LISTEN) { fastserve_start(hostname); }
+
   // Perform the requested command.
   switch (commands[command].id) {
    case CMD_RESET:    result = ps2link_command_reset();                         break;
@@ -216,9 +220,6 @@
    case CMD_LISTEN:   result = 0;                                               break;
   }
   if (result < 0) { fprintf(stderr, "Error: Could not send the command.\n"); ps2link_disconnect(); return PS2CLIENT_EXIT_NOCONNECT; }
-
-  // While a program runs, the fast path serves its files too.
-  if (commands[command].id == CMD_EXECEE || commands[command].id == CMD_EXECIOP || commands[command].id == CMD_LISTEN) { fastserve_start(hostname); }
 
   // Enter the main loop.
   result = ps2link_mainloop(timeout);
