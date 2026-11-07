@@ -212,6 +212,13 @@ check "status, in the shell" 0 "${H[@]}" -t 2 status
 expect "status: menu" test "${OUT%% *}" = "state=menu"
 stop_fake
 check "status, nothing there" 69 "${H[@]}" -t 1 status
+# A host that is up with nothing on the port refuses at once (ICMP): the
+# client still asks only every 200 ms. The counters are this namespace's.
+udp_out() { awk '/^Udp:/ { n = $5 } END { print n }' /proc/net/snmp; }
+before=$(udp_out)
+check "status, refused" 69 -h 127.0.0.1 -t 1 status
+sent=$(( $(udp_out) - before ))
+expect "status, refused: at most 6 requests in 1 s (sent $sent)" test "$sent" -le 6
 
 expect "fast path server" python3 "$HERE/fastserve_test.py" "$CLIENT"
 

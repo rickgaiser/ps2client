@@ -197,14 +197,22 @@
   command.number = htonl(PS2LINK_COMMAND_STATUS);
   command.length = htons(sizeof(command));
 
-  // UDP: ask again if no answer comes.
-  while (time_ms() - start < timeout_ms) { fd_set fds; struct timeval tv = { 0, 200000 }; int size; unsigned int state;
+  // UDP: ask again if no answer comes, at most every 200 ms. A host where
+  // nothing listens on the port (a ps2 between loaders, its IOP reset) answers
+  // at once with ICMP port unreachable, which recv reports: wait the rest of
+  // the 200 ms then too, or the client floods the ps2 with requests.
+  while (time_ms() - start < timeout_ms) { long long sent = time_ms(), left; int size = -1; unsigned int state;
 
    if (network_send(command_socket, &command, sizeof(command)) < 0) { sleep_ms(200); continue; }
-   FD_ZERO(&fds); FD_SET(command_socket, &fds);
-   if (select(command_socket + 1, &fds, NULL, NULL, &tv) <= 0) { continue; }
-   // Version 1 ends after the path.
-   if ((size = recv(command_socket, (void *)&reply, sizeof(reply), 0)) < (int)(sizeof(reply) - sizeof(reply.model) - sizeof(reply.rom)) || ntohl(reply.number) != PS2LINK_RESPONSE_STATUS) { continue; }
+   while ((left = 200 - (time_ms() - sent)) > 0) { fd_set fds; struct timeval tv = { 0, (long)left * 1000 };
+    FD_ZERO(&fds); FD_SET(command_socket, &fds);
+    if (select(command_socket + 1, &fds, NULL, NULL, &tv) <= 0) { size = -1; break; }
+    // Version 1 ends after the path.
+    if ((size = recv(command_socket, (void *)&reply, sizeof(reply), 0)) < 0) { sleep_ms((int)left); break; }
+    if (size >= (int)(sizeof(reply) - sizeof(reply.model) - sizeof(reply.rom)) && ntohl(reply.number) == PS2LINK_RESPONSE_STATUS) { break; }
+    size = -1;
+   }
+   if (size < 0) { continue; }
 
    reply.path[sizeof(reply.path) - 1] = 0;
    state = ntohl(reply.state);
