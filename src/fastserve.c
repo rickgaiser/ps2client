@@ -40,7 +40,7 @@
  // Testing: PS2CLIENT_FAST_DROP=<n> leaves out every n-th frame.
  static unsigned int drop_every, frames_sent;
 
- enum { OP_OPEN = 1, OP_CLOSE, OP_READ, OP_LOG, OP_DATA, OP_WRITE, OP_COMMIT, OP_HELLO, OP_SIZE, OP_ANSWER = 0x80 };
+ enum { OP_OPEN = 1, OP_CLOSE, OP_READ, OP_LOG, OP_DATA, OP_WRITE, OP_COMMIT, OP_HELLO, OP_SIZE, OP_TTY, OP_ANSWER = 0x80 };
 
  static uint32_t get32(const unsigned char *p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
  static void put32(unsigned char *p, uint32_t v) { p[0] = v; p[1] = v >> 8; p[2] = v >> 16; p[3] = v >> 24; }
@@ -116,12 +116,41 @@
 
  }
 
+ // The PS2's console (TTY), for the session our HELLO names: each byte printed
+ // once and in order. A frame's a is its offset in the stream; the answer's b
+ // says how far we have it, and the PS2 sends again from there. The stream
+ // (b, new at each start of the PS2's console) starts where its first frame to
+ // this session does.
+ static int tty_started;
+ static uint32_t tty_have, tty_stream;
+
+ static void serve_tty(int sock, struct sockaddr_in *to, unsigned char *request, ssize_t got) {
+  uint32_t at = get32(request + 8), length = request[12] | request[13] << 8;
+
+  if (got < FAST_HDR + (ssize_t)length) { return; }
+  // a new stream: the PS2's console started again (an IOP reset)
+  if (!tty_started || get32(request + 14) != tty_stream) { tty_have = at; tty_stream = get32(request + 14); tty_started = 1; }
+  if ((int32_t)(at - tty_have) <= 0 && (int32_t)(at + length - tty_have) > 0) {
+   uint32_t skip = tty_have - at;
+   tty_have = at + length;
+   // the answer first: we may stop at a marker in this text
+   answer(sock, to, request, 0, tty_have);
+   ps2link_console_out((char *)request + FAST_HDR + skip, (int)(length - skip));
+   fflush(stdout);
+   return;
+  }
+  answer(sock, to, request, 0, tty_have);
+
+ }
+
  static volatile int stopping;
  static int beside_command;
 
  int fastserve_run(char *hostname, int seconds) { static unsigned char request[2048];
   struct sockaddr_in me, from, ps2;
   long long end = seconds ? now_ns() + (long long)seconds * 1000000000 : 0, hello = 0;
+  // ours alone: a new one tells the PS2 to drop what the last ps2client did not take
+  uint32_t session = (uint32_t)(now_ns() ^ ((long long)getpid() << 20)) | 1;
   struct hostent *entry = hostname ? gethostbyname(hostname) : NULL;
   int sock = socket(AF_INET, SOCK_DGRAM, 0), size = 4 << 20;
 
@@ -147,7 +176,7 @@
    ssize_t got;
 
    if (entry && now_ns() >= hello) { unsigned char b[FAST_HDR];
-    header(b, OP_HELLO, 0, 0, 0, 0);
+    header(b, OP_HELLO, 0, session, 0, 0);
     sendto(sock, b, sizeof(b), 0, (struct sockaddr *)&ps2, sizeof(ps2));
     hello = now_ns() + 1000000000;
    }
@@ -173,10 +202,16 @@
     case OP_WRITE: serve_write(request, got); break;
     case OP_COMMIT: answer(sock, &from, request, 0, get32(request + 4) == write_id ? write_have : 0); break;
     case OP_LOG: printf("%s", (char *)request + FAST_HDR); break;
+    case OP_TTY: serve_tty(sock, &from, request, got); break;
    }
 
   }
 
+  // goodbye: a HELLO without a session gives the PS2's console back to the broadcast
+  if (entry) { unsigned char b[FAST_HDR];
+   header(b, OP_HELLO, 0, 0, 0, 0);
+   sendto(sock, b, sizeof(b), 0, (struct sockaddr *)&ps2, sizeof(ps2));
+  }
   close(sock);
   return PS2CLIENT_EXIT_OK;
 

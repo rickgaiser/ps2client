@@ -116,6 +116,16 @@
 
  }
 
+ // Console output, from the console port or the fast path: printed as it came
+ // (not null-terminated), scanned for the marker, and counted as activity.
+ void ps2link_console_out(char *buffer, int size) {
+
+  fwrite(buffer, 1, size, stdout);
+  ps2link_scan_console(buffer, size);
+  ps2link_set_activity();
+
+ }
+
  ///////////////////////
  // PS2LINK FUNCTIONS //
  ///////////////////////
@@ -1039,14 +1049,7 @@ int ps2link_response_getstat(int result, unsigned int mode, unsigned int attr, u
    size = network_receive(console_socket, buffer, sizeof(buffer));
    if (size < 0) { sleep_ms(10); continue; }
 
-   // Print out exactly what came in: a packet is not null-terminated.
-   fwrite(buffer, 1, size, stdout);
-
-   // Look for the marker.
-   ps2link_scan_console(buffer, size);
-
-   // Reset the timeout counter.
-   ps2link_set_activity();
+   ps2link_console_out(buffer, size);
 
   }
 

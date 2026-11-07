@@ -4,7 +4,7 @@ of a file and a range asked for again.  fastserve_test.py <ps2client>"""
 import os, socket, struct, subprocess, sys, tempfile, time
 
 PORT, HDR, CHUNK = 18197, 22, 1408
-OPEN, CLOSE, READ, DATA, WRITE, COMMIT, ANSWER = 1, 2, 3, 5, 6, 7, 0x80
+OPEN, CLOSE, READ, DATA, WRITE, COMMIT, TTY, ANSWER = 1, 2, 3, 5, 6, 7, 10, 0x80
 FULL = 0xFFFFFFFF  # no end of file in this range
 
 
@@ -46,7 +46,7 @@ def read(s, ident, handle, pos, size, at):
 os.chdir(tempfile.mkdtemp())
 data = bytes((i * 7 + (i >> 8)) & 255 for i in range(10000))
 open("f.bin", "wb").write(data)
-server = subprocess.Popen([sys.argv[1], "-t", "8", "serve"])
+server = subprocess.Popen([sys.argv[1], "-t", "8", "serve"], stdout=subprocess.PIPE)
 time.sleep(0.3)
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.connect(("127.0.0.1", PORT))
@@ -94,6 +94,22 @@ try:
     assert struct.unpack("<I", r[14:18])[0] == 0, "another id has none"
     assert request(s, header(CLOSE, 11, w), 11) == 0
     assert open("w.bin", "rb").read() == data[:2 * CHUNK + 100]
+
+    # the console: each byte once and in order, the answer saying how far
+    def tty(at, text, stream=1):
+        s.send(header(TTY, 0, at, len(text), stream) + text)
+        r = s.recv(2048)
+        assert r[2] == TTY | ANSWER, r[:4]
+        return struct.unpack("<I", r[14:18])[0]
+    assert tty(5000, b"one ") == 5004, "the stream starts at the first frame"
+    assert tty(5008, b"late") == 5004, "a gap: not printed, asked for again"
+    assert tty(5000, b"one two ") == 5008, "overlapping: only what is new"
+    assert tty(5004, b"two ") == 5008, "twice: nothing"
+    assert tty(5008, b"three\n") == 5014
+    assert tty(0, b"four\n", 2) == 5, "a new stream (the IOP was reset) from its first frame"
     print("fastserve: all passed")
 finally:
     server.terminate()
+out = server.communicate()[0]
+assert out == b"one two three\nfour\n", out
+print("fastserve: console passed")

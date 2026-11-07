@@ -20,6 +20,9 @@
  // Exit the main loop when a console line contains marker (NULL: never).
  void ps2link_set_marker(char *marker);
 
+ // Console output from the PS2, by either way.
+ void ps2link_console_out(char *buffer, int size);
+
  // Returns 0, or PS2CLIENT_EXIT_PORTBUSY / PS2CLIENT_EXIT_NOCONNECT.
  int ps2link_connect(char *hostname, int what, int timeout_ms);
 
