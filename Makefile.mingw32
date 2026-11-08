@@ -15,6 +15,11 @@
  ## CLIENT LIBS ##
  #################
 
+ OFILES += obj/fastserve_win32.o
+ obj/fastserve_win32.o: src/fastserve_win32.c src/fastserve.h
+	@mkdir -p obj
+	$(CC) $(INC) -c src/fastserve_win32.c -o obj/fastserve_win32.o
+
  OFILES += obj/network.o
  obj/network.o: src/network.c src/network.h
 	@mkdir -p obj
