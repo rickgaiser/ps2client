@@ -191,8 +191,13 @@
   ps2link_set_marker(marker);
   if ((result = ps2link_connect(hostname, what, CONNECT_TIMEOUT_MS)) != 0) { return result; }
 
-  // Wait until ps2link can serve the host: files the command needs.
-  if ((what & PS2LINK_CONNECT_REQUEST) && ps2link_handshake(HANDSHAKE_TIMEOUT_MS) < 0) {
+  // Wait until ps2link can serve the host: files the command needs. listen
+  // asks mxlink's status instead of pinging: a ping needs the EE side, which
+  // stops mxlink's shell, and the shell may be what uses the host: files
+  // (its HOST device). A ps2link without status gets the ping.
+  if ((what & PS2LINK_CONNECT_REQUEST) && commands[command].id == CMD_LISTEN &&
+      ps2link_status_quiet(1000) >= 0) {
+  } else if ((what & PS2LINK_CONNECT_REQUEST) && ps2link_handshake(HANDSHAKE_TIMEOUT_MS) < 0) {
    fprintf(stderr, "Error: ps2link at %s accepted the connection but does not answer.\n", hostname);
    ps2link_disconnect();
    return PS2CLIENT_EXIT_NOCONNECT;

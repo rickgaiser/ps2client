@@ -199,7 +199,7 @@
 
  }
 
- int ps2link_status(int timeout_ms) { long long start = time_ms();
+ static int status_query(int timeout_ms, int print) { long long start = time_ms();
   struct { unsigned int number; unsigned short length; } PACKED command;
   struct { unsigned int number; unsigned short length; unsigned int version, state, returns; int last_status; char path[256]; char model[16]; char rom[16]; } PACKED reply;
   static const char *states[] = { "starting", "ready", "running", "menu" };
@@ -226,6 +226,7 @@
 
    reply.path[sizeof(reply.path) - 1] = 0;
    state = ntohl(reply.state);
+   if (!print) { return 0; }
    printf("state=%s returns=%u status=%d ", state < 4 ? states[state] : "unknown", ntohl(reply.returns), (int)ntohl(reply.last_status));
    if (size >= (int)sizeof(reply) && ntohl(reply.version) >= 2) { reply.model[sizeof(reply.model) - 1] = 0; reply.rom[sizeof(reply.rom) - 1] = 0; printf("model=%s rom=%s ", reply.model, reply.rom); }
    printf("program=%s\n", reply.path);
@@ -237,6 +238,11 @@
   return -1;
 
  }
+
+ int ps2link_status(int timeout_ms) { return status_query(timeout_ms, 1); }
+
+ // mxlink answers: it is up, without a ping (listen)
+ int ps2link_status_quiet(int timeout_ms) { return status_query(timeout_ms, 0); }
 
  int ps2link_mainloop(int timeout) { int status = PS2CLIENT_EXIT_OK;
 

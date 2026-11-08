@@ -34,6 +34,7 @@
  // Ask mxlink's status and print it: state=<starting|ready|running> returns=<n>
  // status=<last exit status> program=<path>. Returns < 0 without an answer.
  int ps2link_status(int timeout_ms);
+ int ps2link_status_quiet(int timeout_ms);
 
  // Returns the exit status for ps2client.
  int ps2link_mainloop(int timeout);

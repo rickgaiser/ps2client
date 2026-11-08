@@ -133,6 +133,9 @@ class Fake:
 
     def command(self, packet):
         number, _ = struct.unpack(">IH", packet[:6])
+        if self.log:
+            with open(self.log, "a") as f:
+                f.write("command %08x\n" % number)
         if number == CMD_DUMPREG:
             if self.ignore_dumpreg > 0:
                 self.ignore_dumpreg -= 1
@@ -161,8 +164,10 @@ def main():
     ap.add_argument("--menu", action="store_true", help="an mxlink in its shell")
     ap.add_argument("--status-v1", action="store_true", help="an mxlink whose status has no model and rom")
     ap.add_argument("--ignore-dumpreg", type=int, default=0, help="ignore the first N dumpreg commands (not ready yet)")
+    ap.add_argument("--log", help="append each command's number to this file")
     opts = ap.parse_args()
     fake = Fake(opts.ignore_dumpreg)
+    fake.log = opts.log
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

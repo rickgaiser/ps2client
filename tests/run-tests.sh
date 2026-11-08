@@ -154,6 +154,27 @@ check "console port in use" 75 "${H[@]}" -t 5 -e @@END@@ execee host:nostatus.el
 expect "port in use: clear message" grep -q "another ps2client" err.txt
 kill $LISTENER; wait $LISTENER 2>/dev/null
 
+# --- listen beside mxlink's shell: no ping (a ping needs the EE side, which
+# stops the shell, and the shell may use the host: files); a ps2link without
+# status still gets one
+stop_fake
+start_fake --menu --log "$WORK/cmds.txt"
+"$CLIENT" "${H[@]}" -t 5 listen > /dev/null 2>&1 &
+LISTENER=$!
+sleep 1.5
+kill $LISTENER; wait $LISTENER 2>/dev/null
+expect "listen beside the shell: no ping" sh -c '! grep -q "command babe020a" "$1"' - "$WORK/cmds.txt"
+stop_fake
+rm -f "$WORK/cmds.txt"
+start_fake --no-status --log "$WORK/cmds.txt"
+"$CLIENT" "${H[@]}" -t 5 listen > /dev/null 2>&1 &
+LISTENER=$!
+sleep 2.5
+kill $LISTENER; wait $LISTENER 2>/dev/null
+expect "listen to a ps2link without status: a ping" grep -q "command babe020a" "$WORK/cmds.txt"
+stop_fake
+start_fake
+
 # --- reset needs neither console nor request connection
 check "reset" 0 "${H[@]}" reset
 

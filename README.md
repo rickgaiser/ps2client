@@ -133,7 +133,9 @@ I really don't know! OH NOES!!
 
 *   `listen`
 
-Listen to the ps2link network console.
+Listen to the ps2link network console, and serve `host:` files from the current directory.
+Beside mxlink it asks the status rather than pinging: a ping needs mxlink's EE side, which stops
+its shell, and the shell may be what uses the `host:` files (its HOST device).
 
 * `ping`
 
